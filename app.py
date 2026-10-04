@@ -44,7 +44,7 @@ SYSTEM_INSTRUCTION = (
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 async_chat_session = ai_client.aio.chats.create(
-    model="gemini-2.5-flash-lite",
+    model="gemini-3.5-flash-lite",
     config={
         "system_instruction": SYSTEM_INSTRUCTION,
         "temperature": 0.7,
