@@ -11,7 +11,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ==========================================
-# FLASK WEB SERVER (For Render Health Checks)
+# 1. FLASK WEB SERVER CONFIGURATION
 # ==========================================
 app = Flask(__name__)
 
@@ -19,14 +19,9 @@ app = Flask(__name__)
 def home():
     return "Bot is alive and running 24/7!"
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
 # ==========================================
-# CONFIGURATIONS (Loaded from Environment Variables)
+# 2. ENVIRONMENT & CONFIGURATIONS
 # ==========================================
-# GOOD: Using environment variables
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 MY_USER_ID = int(os.environ.get("MY_USER_ID", "0"))
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -44,7 +39,7 @@ SYSTEM_INSTRUCTION = (
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 async_chat_session = ai_client.aio.chats.create(
-    model="gemini-3.5-flash-lite",
+    model="gemini-2.5-flash-lite",
     config={
         "system_instruction": SYSTEM_INSTRUCTION,
         "temperature": 0.7,
@@ -61,6 +56,9 @@ meal_status = {
     "dinner": False
 }
 
+# ==========================================
+# 3. HELPER & LLM FUNCTIONS
+# ==========================================
 def get_current_time():
     return datetime.now(TIMEZONE).time()
 
@@ -84,6 +82,9 @@ async def query_llm(user_prompt: str, retries: int = 3) -> str:
             await asyncio.sleep(2)
     return "Hey, tiny delay here! Em chesthunnav?"
 
+# ==========================================
+# 4. BACKGROUND TASKS & HANDLERS
+# ==========================================
 async def wait_and_send_outreach(bot):
     global is_active
     try:
@@ -179,37 +180,37 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(application: Application):
     asyncio.create_task(daily_good_morning_loop(application.bot))
 
-def main():
-    logging.basicConfig(level=logging.INFO)
-    
-    # Start Flask server in background thread
-    threading.Thread(target=run_flask, daemon=True).start()
+# ==========================================
+# 5. BOT POLLING & THREAD INITIALIZATION
+# ==========================================
+logging.basicConfig(level=logging.INFO)
 
-    # Build Telegram Bot App
-    app_bot = (
-        Application.builder()
-        .token(TELEGRAM_TOKEN)
-        .connect_timeout(30.0)
-        .read_timeout(30.0)
-        .write_timeout(30.0)
-        .post_init(post_init)
-        .build()
-    )
+app_bot = (
+    Application.builder()
+    .token(TELEGRAM_TOKEN)
+    .connect_timeout(30.0)
+    .read_timeout(30.0)
+    .write_timeout(30.0)
+    .post_init(post_init)
+    .build()
+)
 
-    app_bot.add_handler(CommandHandler("start", start_command))
-    app_bot.add_handler(CommandHandler("stop", stop_command))
-    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app_bot.add_handler(CommandHandler("start", start_command))
+app_bot.add_handler(CommandHandler("stop", stop_command))
+app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    def start_bot_polling():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        print("Bot polling thread started...")
-        app_bot.run_polling(close_loop=False)
+def start_bot_polling():
+    """Runs Telegram long polling in its own dedicated event loop thread."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    print("Bot polling thread started...")
+    app_bot.run_polling(close_loop=False)
 
+# Start thread automatically when Gunicorn loads this module
 bot_thread = threading.Thread(target=start_bot_polling, daemon=True)
 bot_thread.start()
 
+# Local development fallback
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-    
