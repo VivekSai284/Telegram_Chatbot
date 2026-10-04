@@ -200,8 +200,16 @@ def main():
     app_bot.add_handler(CommandHandler("stop", stop_command))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Bot polling started...")
-    app_bot.run_polling()
+    def start_bot_polling():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        print("Bot polling thread started...")
+        app_bot.run_polling(close_loop=False)
+
+bot_thread = threading.Thread(target=start_bot_polling, daemon=True)
+bot_thread.start()
 
 if __name__ == "__main__":
-    main()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+    
