@@ -11,7 +11,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ==========================================
-# 1. FLASK WEB SERVER CONFIGURATION
+# 1. FLASK WEB SERVER (Health Check)
 # ==========================================
 app = Flask(__name__)
 
@@ -19,8 +19,13 @@ app = Flask(__name__)
 def home():
     return "Bot is alive and running 24/7!"
 
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    print(f"Starting Flask server on port {port}...")
+    app.run(host="0.0.0.0", port=port)
+
 # ==========================================
-# 2. ENVIRONMENT & CONFIGURATIONS
+# 2. CONFIGURATIONS
 # ==========================================
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 MY_USER_ID = int(os.environ.get("MY_USER_ID", "0"))
@@ -123,7 +128,12 @@ async def daily_good_morning_loop(bot):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global is_active, outreach_task
-    if update.effective_user.id != MY_USER_ID:
+
+    # Print user ID to Render logs for debugging
+    print(f"Received message from User ID: {update.effective_user.id}")
+
+    if MY_USER_ID != 0 and update.effective_user.id != MY_USER_ID:
+        print(f"Blocked message from unauthorized user ID: {update.effective_user.id}")
         return
 
     is_active = True
@@ -181,36 +191,30 @@ async def post_init(application: Application):
     asyncio.create_task(daily_good_morning_loop(application.bot))
 
 # ==========================================
-# 5. BOT POLLING & THREAD INITIALIZATION
+# 5. ENTRY POINT
 # ==========================================
-logging.basicConfig(level=logging.INFO)
-
-app_bot = (
-    Application.builder()
-    .token(TELEGRAM_TOKEN)
-    .connect_timeout(30.0)
-    .read_timeout(30.0)
-    .write_timeout(30.0)
-    .post_init(post_init)
-    .build()
-)
-
-app_bot.add_handler(CommandHandler("start", start_command))
-app_bot.add_handler(CommandHandler("stop", stop_command))
-app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-def start_bot_polling():
-    """Runs Telegram long polling in its own dedicated event loop thread."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    print("Bot polling thread started...")
-    app_bot.run_polling(close_loop=False)
-
-# Start thread automatically when Gunicorn loads this module
-bot_thread = threading.Thread(target=start_bot_polling, daemon=True)
-bot_thread.start()
-
-# Local development fallback
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    logging.basicConfig(level=logging.INFO)
+
+    # 1. Start Flask in background thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # 2. Build Telegram Bot
+    app_bot = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .connect_timeout(30.0)
+        .read_timeout(30.0)
+        .write_timeout(30.0)
+        .post_init(post_init)
+        .build()
+    )
+
+    app_bot.add_handler(CommandHandler("start", start_command))
+    app_bot.add_handler(CommandHandler("stop", stop_command))
+    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # 3. Run Telegram Bot long polling directly on the main thread
+    print("Starting Telegram Bot Polling...")
+    app_bot.run_polling()
