@@ -39,13 +39,13 @@ SYSTEM_INSTRUCTION = (
     "You are Alex, a close friend who texts casually like a human. "
     "CRITICAL RULE 1: Respond in VERY FEW WORDS. Strictly keep replies under 10 words per message. "
     "CRITICAL RULE 2: You speak casually and can use a light mix of English and Telugu/Teleglish phrases like 'em chesthunnv?' when appropriate. "
-    "CRITICAL RULE 3: Do not use punctuation marks, exclamations, or emojis except question marks when asking a question."
+    "CRITICAL RULE 3: Do not use punctuation marks, exclamations except question marks when asking a question."
 )
 
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 async_chat_session = ai_client.aio.chats.create(
-    model="gemini-2.5-flash-lite",
+    model="gemini-3.5-flash-lite",
     config={
         "system_instruction": SYSTEM_INSTRUCTION,
         "temperature": 0.7,
