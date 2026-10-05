@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import logging
 import random
@@ -38,13 +39,13 @@ SYSTEM_INSTRUCTION = (
     "You are Alex, a close friend who texts casually like a human. "
     "CRITICAL RULE 1: Respond in VERY FEW WORDS. Strictly keep replies under 10 words per message. "
     "CRITICAL RULE 2: You speak casually and can use a light mix of English and Telugu/Teleglish phrases like 'em chesthunnv?' when appropriate. "
-    "CRITICAL RULE 3: Keep answers brief, natural, and friendly."
+    "CRITICAL RULE 3: Do not use punctuation marks, exclamations, or emojis except question marks when asking a question."
 )
 
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 async_chat_session = ai_client.aio.chats.create(
-    model="gemini-3.5-flash-lite",
+    model="gemini-2.5-flash-lite",
     config={
         "system_instruction": SYSTEM_INSTRUCTION,
         "temperature": 0.7,
@@ -64,6 +65,13 @@ meal_status = {
 # ==========================================
 # 3. HELPER & LLM FUNCTIONS
 # ==========================================
+def clean_response(text: str) -> str:
+    """Removes all special characters, symbols, and punctuation except '?'."""
+    # Retain letters, numbers, whitespace, and '?'
+    cleaned = re.sub(r'[^a-zA-Z0-9\s?]', '', text)
+    # Collapse multiple spaces into a single space
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
 def get_current_time():
     return datetime.now(TIMEZONE).time()
 
@@ -81,11 +89,12 @@ async def query_llm(user_prompt: str, retries: int = 3) -> str:
     for attempt in range(retries):
         try:
             response = await async_chat_session.send_message(user_prompt)
-            return response.text.strip()
+            raw_text = response.text.strip()
+            return clean_response(raw_text)
         except Exception as e:
             print(f"Gemini API Error (Attempt {attempt + 1}/{retries}): {e}")
             await asyncio.sleep(2)
-    return "Hey, tiny delay here! Em chesthunnav?"
+    return "Hey tiny delay here em chesthunnav?"
 
 # ==========================================
 # 4. BACKGROUND TASKS & HANDLERS
@@ -129,7 +138,6 @@ async def daily_good_morning_loop(bot):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global is_active, outreach_task
 
-    # Print user ID to Render logs for debugging
     print(f"Received message from User ID: {update.effective_user.id}")
 
     if MY_USER_ID != 0 and update.effective_user.id != MY_USER_ID:
@@ -196,11 +204,9 @@ async def post_init(application: Application):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    # 1. Start Flask in background thread
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
-    # 2. Build Telegram Bot
     app_bot = (
         Application.builder()
         .token(TELEGRAM_TOKEN)
@@ -215,6 +221,5 @@ if __name__ == "__main__":
     app_bot.add_handler(CommandHandler("stop", stop_command))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # 3. Run Telegram Bot long polling directly on the main thread
     print("Starting Telegram Bot Polling...")
     app_bot.run_polling()
